@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   langchain_api:
-    build: .
-    container_name: langchain_api
+    image: nguyenhau2003/mindustry-gpt:latest
+    container_name: mindustry-gpt
     restart: unless-stopped
     ports:
       - '9090:9090'
