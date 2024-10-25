@@ -7,14 +7,16 @@ ENV LC_ALL=C.UTF-8
 RUN pip install --upgrade pip
 
 # Copy project files
-COPY . /app
+COPY /app /app
+COPY docker-compose.yml docker-compose.yml
+COPY Dockerfile Dockerfile
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r /app/app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 RUN pip install fastapi uvicorn
 
 # Expose FastAPI's default port
 EXPOSE 9090
 
 # Run FastAPI server when the container starts
-ENTRYPOINT ["uvicorn", "app.app.main:app", "--host", "0.0.0.0", "--port", "9090"]
+ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9090"]

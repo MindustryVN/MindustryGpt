@@ -2,12 +2,12 @@ version: '3.8'
 
 services:
   langchain_api:
-    image: nguyenhau2003/mindustry-gpt:latest
+    build: .
     container_name: mindustry-gpt
+    pull_policy: always
     restart: unless-stopped
     ports:
       - '9090:9090'
-
     networks:
       - my_network
 
