@@ -1,8 +1,0 @@
-fastapi
-uvicorn
-debugpy
-langchain-community
-langchain
-langchainhub
-gpt4all
-requests
