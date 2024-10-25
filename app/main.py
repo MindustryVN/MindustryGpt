@@ -8,7 +8,7 @@ from langchain.chains import LLMChain
 app = FastAPI()
 
 # Initialize the LLM model
-llm = Ollama(model="llama2-uncensored", temperature=0.9,base_url='http://host.docker.internal:11434')
+llm = Ollama(model="qwen2.5:0.5b", temperature=0.9,base_url='http://host.docker.internal:11434')
 
 # Define the prompt template for translation
 prompt = PromptTemplate(
