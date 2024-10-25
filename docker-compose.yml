@@ -15,6 +15,7 @@ services:
       - '11434:11434' # Default port for Ollama
     volumes:
       - ./ollama/ollama:/root/.ollama
+      - ollama_data:/root/.ollama
     pull_policy: always
     tty: true
     restart: always
