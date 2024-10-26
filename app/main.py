@@ -15,6 +15,7 @@ prompt = PromptTemplate(
     input_variables=["text", "target_language"],
     template=(
         "Identify the language of the following text and translate it into {target_language}. "
+        "Only give me the translated content, no yapping."
         "Preserve the original meaning, tone, and context. Do not alter proper names or technical terms.\n\n"
         "Text:\n{text}"
     )

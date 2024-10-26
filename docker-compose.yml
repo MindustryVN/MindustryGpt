@@ -14,8 +14,6 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
-    ports:
-      - '11434:11434' # Default port for Ollama
     volumes:
       - ./ollama/ollama:/root/.ollama
       - ollama_data:/root/.ollama
