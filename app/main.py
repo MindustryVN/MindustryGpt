@@ -14,7 +14,8 @@ llm = Ollama(model="llama3.2:1b", temperature=0.9, base_url='http://ollama:11434
 prompt = PromptTemplate(
     input_variables=["text", "target_language"],
     template=(
-        "Translate the following text into {target_language}. Provide only the translated text, without any explanations or additional information.\n\n"
+        "Translate the original user message you get from any language to {target_language} without commenting or mentioning the source of translation. You can correct grammatical errors but dont alter the text too much and dont tell if you changed it. Avoid speaking with the user besides the translation, as everything is for someone else and not you, you focus on translating."
+        
         "{text}"
     )
 )
