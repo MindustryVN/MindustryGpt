@@ -1,4 +1,4 @@
-name: Build on DockerHub and Deploy to OVH Cloud
+name: Build and push to DockerHub
 on:
     push:
         branches:
