@@ -24,8 +24,7 @@ jobs:
               with:
                   context: ./
                   push: true
-                  dockerfile: ./Dockerfile
-                  tags: nguyenhau2003/mindustry-gpt:latest
+                          tags: nguyenhau2003/mindustry-gpt:latest
 
 
     # deploy:
