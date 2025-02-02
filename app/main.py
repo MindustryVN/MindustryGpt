@@ -6,8 +6,8 @@ import numpy as np
 from sqlalchemy import CursorResult, create_engine, text
 from sqlalchemy.orm import sessionmaker
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
-from typing import Dict, List,Optional
+from pydantic import BaseModel, Json
+from typing import Dict, List
 
 
 load_dotenv()
@@ -38,7 +38,7 @@ with engine.connect() as conn:
 
 class InsertRequest(BaseModel):
     text: str
-    source: str
+    metadata: Json
 
 class UpdateRequest(BaseModel):
     text: str
@@ -67,11 +67,11 @@ def insert_text(request: InsertRequest):
     vector = parse_embedding(embedding).tolist()
 
     query = text("""
-        INSERT INTO embeddings (vector, text, source)
-        VALUES (:vector, :text, :source)
+        INSERT INTO embeddings (vector, text, metadata)
+        VALUES (:vector, :text, :metadata)
         RETURNING id
     """)
-    result = session.execute(query, {"vector": vector, "text": request.text, "source": request.source})
+    result = session.execute(query, {"vector": vector, "text": request.text, "metadata": request.metadata})
     session.commit()
     
     return {"id": result.fetchone()[0], "message": "Inserted successfully"}
@@ -119,7 +119,7 @@ def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
     offset = (page) * limit
     
     query = text(f"""
-        SELECT id, text 
+        SELECT id, text, metadata 
         FROM embeddings
         {order_clause}
         LIMIT :limit
@@ -130,7 +130,7 @@ def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
     items: List[Dict[str, str]] = []
 
     for row in result.fetchall():
-        items.append({"id": str(row[0]), "text": str(row[1])})
+        items.append({"id": str(row[0]), "text": str(row[1]), "metadata": str(row[2])})
 
     return items
 
