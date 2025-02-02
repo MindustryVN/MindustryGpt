@@ -4,3 +4,4 @@ sqlalchemy
 google-generativeai
 numpy
 python-dotenv
+psycopg2
