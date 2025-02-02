@@ -22,7 +22,7 @@ if not GEMINI_API_KEY or not POSTGRES_URL:
 
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction="You are MindustryTool a chat companion, user is talking to you, response to them with related data, if there is no data or data is not related, answer it with your own knowledge")
+model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction="You are MindustryTool a discord chat bot companion")
 
 
 app = FastAPI(debug=True)
@@ -31,6 +31,8 @@ app = FastAPI(debug=True)
 engine = create_engine(POSTGRES_URL)
 Session = sessionmaker(bind=engine)
 session = Session()
+
+chat_session = None
 
 with engine.connect() as conn:
     conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
@@ -135,15 +137,15 @@ def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
     return items
 
 
-def stream(query: str, history: List[str]):
-    context = "\n".join(row[0] for row in history)
-    
-    print(f'Question: {query}\nContext: {context}')
-    
-    session = model.start_chat(history=[{
+def stream(query: str, history: List[str]):    
+    history = [{
         "role": "user",
-        "parts": i
-    } for i in history])
+        "parts": i[0]
+    } for i in history]
+    
+    print(f'Question: {query}\nContext: {history}')
+    
+    session = model.start_chat(history=history)
     
     response = session.send_message(query, stream=True)
     
