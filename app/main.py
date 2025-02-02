@@ -1,112 +1,96 @@
-# from fastapi import FastAPI, HTTPException
-# from pydantic import BaseModel
-# from langchain_community.llms import Ollama
-# from langchain.prompts import PromptTemplate
-# from langchain.chains import LLMChain
-
-# # Initialize the FastAPI app
-# app = FastAPI()
-
-# # Initialize the LLM model
-# llm = Ollama(model="llama3.2:1b", temperature=0.9, base_url='http://ollama:11434')
-
-# # Define the prompt template for translation
-# prompt = PromptTemplate(
-#     input_variables=["text", "target_language"],
-#     template=(
-#         "Translate the original user message you get from any language to {target_language} without commenting or mentioning the source of translation. You can correct grammatical errors but dont alter the text too much and dont tell if you changed it. Avoid speaking with the user besides the translation, as everything is for someone else and not you, you focus on translating."
-        
-#         "{text}"
-#     )
-# )
-
-# # Create the LLM chain
-# chain = LLMChain(llm=llm, prompt=prompt, verbose=False)
-
-# # Define the request body schema
-# class TranslationRequest(BaseModel):
-#     text: str
-#     target_language: str
-
-# # Translation endpoint
-# @app.post("/translate")
-# async def translate(request: TranslationRequest):
-#     try:
-#         # Run the translation chain
-#         translation = chain.run({
-#             "text": request.text, 
-#             "target_language": request.target_language
-#         })
-#         return {"translation": translation}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-
-# # Health check endpoint
-# @app.get("/health")
-# async def health_check():
-#     return {"status": "ok"}
-
-
-from langchain_postgres import PGVector
-from langchain.chat_models import ChatOpenAI
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
-import psycopg3
-import os
 from dotenv import load_dotenv
+
+import os
+import google.generativeai as genai
+import numpy as np
+import psycopg2
+from pgvector.psycopg2 import register_vector
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from typing import List
 
 load_dotenv()
 
-# Database connection settings
-DB_SETTINGS = {
-    'dbname': os.getenv('DB_NAME', 'default_db_name'),
-    'user': os.getenv('DB_USER', 'default_user'),
-    'password': os.getenv('DB_PASSWORD', 'default_password'),
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': int(os.getenv('DB_PORT', 5432)),
-}
-conn = psycopg3.connect(**DB_SETTINGS)
+GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
+POSTGRES_URL: str | None = os.getenv("POSTGRES_URL")
 
-# Initialize PGVector as the vector store
-vectorstore = PGVector(
-    connection=conn,
-    table_name="document_embeddings",
-    embedding_dim=1536
-)
+if GEMINI_API_KEY is None:
+    raise ValueError("GEMINI_API_KEY is not set.")
 
-# Initialize Gemini 1.5 embeddings (use OpenAIEmbeddings as a placeholder)
-embeddings = OpenAIEmbeddings(model="text-embedding-gemini-001")
+genai.configure(api_key=GEMINI_API_KEY)
 
-documents = [
-    {"id": "1", "content": "What is LangChain?"},
-    {"id": "2", "content": "How does PGVector work?"},
-    # Add more documents as needed
-]
+model = genai.GenerativeModel(model_name='gemini-1.5-flash')
 
-for doc in documents:
-    embedding = embeddings.embed_query(doc["content"])
-    vectorstore.add_documents([{
-        "content": doc["content"],
-        "embedding": embedding
-    }])
 
-# Initialize the retrieval QA chain
-retriever = vectorstore.as_retriever(search_type="similarity", search_k=3)
+if POSTGRES_URL is None:
+    raise ValueError("POSTGRES_URL is not set.")
+conn = psycopg2.connect(POSTGRES_URL)
+register_vector(conn)
+cursor = conn.cursor()
 
-chat_model = ChatOpenAI(model="gpt-4", temperature=0)  # Replace with Gemini 1.5 Flash model name if supported
 
-qa_chain = RetrievalQA(
-    retriever=retriever,
-    llm=chat_model,
-    prompt=PromptTemplate(
-        input_variables=["context", "question"],
-        template="Use the following context to answer the question:\n\nContext:\n{context}\n\nQuestion:\n{question}\n\nAnswer:"
+engine = create_engine(POSTGRES_URL)
+Session = sessionmaker(bind=engine)
+session = Session()
+
+
+def get_embedding(content: str, output_dimensionality: int = 768) -> List[float]:
+    result = genai.embed_content(
+        model="models/text-embedding-004",
+        content=content,
+        output_dimensionality=output_dimensionality
     )
-)
+    return result["embedding"]
 
-# Chatbot query function
-def ask_chatbot(question: str):
-    return qa_chain.run(question)
 
-response = ask_chatbot("What is LangChain?")
-print(response)
+def parse_embedding(embedding: List[float]) -> np.ndarray:
+    return np.array(embedding, dtype=np.float32)
+
+
+def save_embedding(vector: np.ndarray, content: str, source: str) -> None:
+    query = text("""
+        INSERT INTO embeddings (vector, text, source)
+        VALUES (:vector, :text, :source)
+    """)
+    session.execute(query, {"vector": vector.tolist(), "text": content, "source": source})
+    session.commit()
+
+
+def find_similar_vectors(query_vector: np.ndarray, limit: int = 5) -> List[str]:
+    query = text("""
+        SELECT text FROM embeddings
+        ORDER BY vector <-> (:vector)::vector
+        LIMIT :limit
+    """)
+    result = session.execute(query, {"vector": query_vector.tolist(), "limit": limit})
+    return [row[0] for row in result.fetchall()]
+
+
+def generate_response(query: str) -> str:
+    
+    embedding = get_embedding(query)
+    query_vector = parse_embedding(embedding)
+
+    
+    retrieved_texts = find_similar_vectors(query_vector)
+    context = " ".join(retrieved_texts)
+
+    
+    augmented_query = f"{query}\n\nContext:\n{context}"
+
+    
+    response = model.generate_content(augmented_query)
+    
+    return response.text
+
+
+if __name__ == "__main__":
+    
+    sample_text: str = "This is a sample text for retrieval."
+    sample_embedding: List[float] = get_embedding(sample_text)
+    save_embedding(parse_embedding(sample_embedding), sample_text, "https://ai.google.dev/api/embeddings")
+
+    
+    query: str = "What is retrieval-augmented generation?"
+    response: str = generate_response(query)
+    print("Generated Response:", response)

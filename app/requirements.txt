@@ -1,9 +1,6 @@
-fastapi
-uvicorn
-langchain_community
-pydantic
-langchain
-pgvector
 psycopg2-binary
-python-dotenv
-langchain_postgres
+pgvector
+sqlalchemy
+requests
+numpy
+google.generativeai
