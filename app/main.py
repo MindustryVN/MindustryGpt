@@ -1,4 +1,5 @@
 import json
+import logging
 from dotenv import load_dotenv
 import os
 from fastapi.responses import StreamingResponse
@@ -9,7 +10,6 @@ from sqlalchemy.orm import sessionmaker
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import Dict, List
-
 
 load_dotenv()
 
@@ -22,16 +22,15 @@ if not GEMINI_API_KEY or not POSTGRES_URL:
 
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction="You are a chat companion, user is talking to you, response to them with related data, if there is no data or data is not related, answer it with your own knowledge")
+model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction="You are MindustryTool a chat companion, user is talking to you, response to them with related data, if there is no data or data is not related, answer it with your own knowledge")
 
 
-app = FastAPI()
+app = FastAPI(debug=True)
 
 
 engine = create_engine(POSTGRES_URL)
 Session = sessionmaker(bind=engine)
 session = Session()
-
 
 with engine.connect() as conn:
     conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
@@ -136,8 +135,18 @@ def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
     return items
 
 
-def stream(query: str):
-    response = model.generate_content(query, stream=True)
+def stream(query: str, history: List[str]):
+    context = "\n".join(row[0] for row in history)
+    
+    print(f'Question: {query}\nContext: {context}')
+    
+    session = model.start_chat(history=[{
+        "role": "user",
+        "parts": i
+    } for i in history])
+    
+    response = session.send_message(query, stream=True)
+    
     for chunk in response:
         yield chunk.text
 
@@ -147,30 +156,18 @@ async def respond_to_question(request: ResponseRequest):
     embedding = get_embedding(request.query)
     query_vector = parse_embedding(embedding).tolist()
     
-    query = text("""
-        INSERT INTO embeddings (vector, text, metadata)
-        VALUES (:vector, :text, :metadata)
-        RETURNING id
-    """)
-    
-    session.execute(query, {"vector": query_vector, "text": request.text, "metadata": request.metadata})
-    session.commit()
-
     search_query = text("""
         SELECT text FROM embeddings
         ORDER BY vector <-> (:vector)::vector
         LIMIT 5
     """)
     retrieved_texts = session.execute(search_query, {"vector": query_vector}).fetchall()
-    context = "\n".join(row[0] for row in retrieved_texts)
-    
-    print(f'Question: {request.query}\nContext: {context}')
 
-    augmented_query = f"User question:{request.query}\n\n Related data:\n{context}"
-    response = stream(augmented_query)
+
+    response = stream(request.query, [row for row in retrieved_texts])
     
     return StreamingResponse(response)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(APP_PORT))
+    uvicorn.run(app, host="0.0.0.0", port=int(APP_PORT),log_level="trace")
