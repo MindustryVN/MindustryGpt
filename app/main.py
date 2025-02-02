@@ -9,7 +9,7 @@ from sqlalchemy import CursorResult, create_engine, text
 from sqlalchemy.orm import sessionmaker
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import Dict, List
+from typing import Dict, List, Union
 
 load_dotenv()
 
@@ -137,20 +137,35 @@ def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
     return items
 
 
-def stream(query: str, history: List[str]):    
+def stream(query: str, history: List[Union[str,str]]):    
     history = [{
-        "role": "user",
+        "role": i[1].get("user", "user"),
         "parts": i[0]
     } for i in history]
     
     print(f'Question: {query}\nContext: {history}')
     
-    session = model.start_chat(history=history)
+    chat_session = model.start_chat(history=history)
     
-    response = session.send_message(query, stream=True)
+    response = chat_session.send_message(query, stream=True)
+    
+    full = ""
     
     for chunk in response:
+        full += chunk.text
         yield chunk.text
+        
+    embedding = get_embedding(full)
+    vector = parse_embedding(embedding).tolist()
+
+    query = text("""
+        INSERT INTO embeddings (vector, text, metadata)
+        VALUES (:vector, :text, :metadata)
+        RETURNING id
+    """)
+    
+    session.execute(query, {"vector": vector, "text": full, "metadata": json.dumps({"id": "bot", "user": "you"})})
+    session.commit()
 
 @app.post("/respond")
 async def respond_to_question(request: ResponseRequest):
@@ -159,14 +174,14 @@ async def respond_to_question(request: ResponseRequest):
     query_vector = parse_embedding(embedding).tolist()
     
     search_query = text("""
-        SELECT text FROM embeddings
+        SELECT text, metadata FROM embeddings
         ORDER BY vector <-> (:vector)::vector
-        LIMIT 10
+        LIMIT 5
     """)
     retrieved_texts = session.execute(search_query, {"vector": query_vector}).fetchall()
     
 
-    response = stream(request.query, [row for row in retrieved_texts])
+    response = stream(request.query, retrieved_texts)
     
     return StreamingResponse(response)
 
