@@ -1,6 +1,7 @@
-psycopg2-binary
-pgvector
+fastapi
+uvicorn
 sqlalchemy
-requests
+google-generativeai
+psycopg2
 numpy
-google.generativeai
+python-dotenv

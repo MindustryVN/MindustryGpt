@@ -19,4 +19,4 @@ RUN pip install fastapi uvicorn
 EXPOSE 9090
 
 # Run FastAPI server when the container starts
-ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9090"]
+ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
