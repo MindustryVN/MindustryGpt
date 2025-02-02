@@ -152,11 +152,11 @@ async def respond_to_question(request: ResponseRequest):
         LIMIT 5
     """)
     retrieved_texts = session.execute(search_query, {"vector": query_vector}).fetchall()
-    context = " ".join(row[0] for row in retrieved_texts)
+    context = "\n".join(row[0] for row in retrieved_texts)
     
-    print(f'Context: {context}')
+    print(f'Question: {request.query}\nContext: {context}')
 
-    augmented_query = f"{request.query}\n\nContext:\n{context}"
+    augmented_query = f"You are a chat companion, user is talking to you, response to them with related data, if there is no data or data is not related, answer it with your own knowledge:\nUser question:{request.query}\n\n Related data:\n{context}"
     response = stream(augmented_query)
     
     return StreamingResponse(response)
