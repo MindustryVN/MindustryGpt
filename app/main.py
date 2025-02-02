@@ -22,7 +22,7 @@ if not GEMINI_API_KEY or not POSTGRES_URL:
 
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction="You are MindustryTool a discord chat bot companion")
+model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction="Bạn là một người bạn trên discord, hãy trả lời các cuộc trò truyện một cách vui vẻ")
 
 
 app = FastAPI(debug=True)
@@ -161,10 +161,10 @@ async def respond_to_question(request: ResponseRequest):
     search_query = text("""
         SELECT text FROM embeddings
         ORDER BY vector <-> (:vector)::vector
-        LIMIT 5
+        LIMIT 10
     """)
     retrieved_texts = session.execute(search_query, {"vector": query_vector}).fetchall()
-
+    
 
     response = stream(request.query, [row for row in retrieved_texts])
     
