@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import os
+from fastapi.responses import StreamingResponse
 import google.generativeai as genai
 import numpy as np
 from sqlalchemy import CursorResult, create_engine, text
@@ -133,8 +134,14 @@ def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
 
     return items
 
+
+def stream(query: str):
+    response = model.generate_content(query, stream=True)
+    for chunk in response:
+        yield chunk.text
+
 @app.post("/respond")
-def respond_to_question(request: ResponseRequest):
+async def respond_to_question(request: ResponseRequest):
     """Generate AI response using RAG."""
     embedding = get_embedding(request.query)
     query_vector = parse_embedding(embedding).tolist()
@@ -150,10 +157,9 @@ def respond_to_question(request: ResponseRequest):
     print(f'Context: {context}')
 
     augmented_query = f"{request.query}\n\nContext:\n{context}"
-    response = model.generate_content(augmented_query)
+    response = stream(augmented_query)
     
-    return response.text
-
+    return StreamingResponse(response)
 
 if __name__ == "__main__":
     import uvicorn
