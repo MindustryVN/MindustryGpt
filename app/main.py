@@ -22,7 +22,7 @@ if not GEMINI_API_KEY or not POSTGRES_URL:
 
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction="You are a chat companion, user is talking to you, response to them with related data, if there is no data or data is not related, answer it with your own knowledge")
 
 
 app = FastAPI()
@@ -166,7 +166,7 @@ async def respond_to_question(request: ResponseRequest):
     
     print(f'Question: {request.query}\nContext: {context}')
 
-    augmented_query = f"You are a chat companion, user is talking to you, response to them with related data, if there is no data or data is not related, answer it with your own knowledge:\nUser question:{request.query}\n\n Related data:\n{context}"
+    augmented_query = f"User question:{request.query}\n\n Related data:\n{context}"
     response = stream(augmented_query)
     
     return StreamingResponse(response)
