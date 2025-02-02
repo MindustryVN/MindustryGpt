@@ -1,3 +1,4 @@
+import json
 from dotenv import load_dotenv
 import os
 from fastapi.responses import StreamingResponse
@@ -6,7 +7,7 @@ import numpy as np
 from sqlalchemy import CursorResult, create_engine, text
 from sqlalchemy.orm import sessionmaker
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, Json
+from pydantic import BaseModel
 from typing import Dict, List
 
 
@@ -38,7 +39,7 @@ with engine.connect() as conn:
 
 class InsertRequest(BaseModel):
     text: str
-    metadata: Json
+    metadata: object
 
 class UpdateRequest(BaseModel):
     text: str
@@ -71,7 +72,7 @@ def insert_text(request: InsertRequest):
         VALUES (:vector, :text, :metadata)
         RETURNING id
     """)
-    result = session.execute(query, {"vector": vector, "text": request.text, "metadata": request.metadata})
+    result = session.execute(query, {"vector": vector, "text": request.text, "metadata": json.dumps( request.metadata)})
     session.commit()
     
     return {"id": result.fetchone()[0], "message": "Inserted successfully"}
@@ -145,6 +146,15 @@ async def respond_to_question(request: ResponseRequest):
     """Generate AI response using RAG."""
     embedding = get_embedding(request.query)
     query_vector = parse_embedding(embedding).tolist()
+    
+    query = text("""
+        INSERT INTO embeddings (vector, text, metadata)
+        VALUES (:vector, :text, :metadata)
+        RETURNING id
+    """)
+    
+    session.execute(query, {"vector": query_vector, "text": request.text, "metadata": request.metadata})
+    session.commit()
 
     search_query = text("""
         SELECT text FROM embeddings
