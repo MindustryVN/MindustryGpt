@@ -2,13 +2,13 @@ from dotenv import load_dotenv
 import os
 import google.generativeai as genai
 import numpy as np
-from sqlalchemy import create_engine, text
+from sqlalchemy import CursorResult, create_engine, text
 from sqlalchemy.orm import sessionmaker
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Dict, List,Optional
 
-# Load environment variables
+
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -18,23 +18,23 @@ APP_PORT = os.getenv("APP_PORT")
 if not GEMINI_API_KEY or not POSTGRES_URL:
     raise ValueError("Environment variables GEMINI_API_KEY and POSTGRES_URL must be set.")
 
-# Configure Gemini API
+
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(model_name="gemini-1.5-flash")
 
-# Setup FastAPI
+
 app = FastAPI()
 
-# Setup SQLAlchemy with pgvector
+
 engine = create_engine(POSTGRES_URL)
 Session = sessionmaker(bind=engine)
 session = Session()
 
-# Ensure the vector extension is enabled
+
 with engine.connect() as conn:
     conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 
-# Pydantic models for request validation
+
 class InsertRequest(BaseModel):
     text: str
     source: str
@@ -42,14 +42,10 @@ class InsertRequest(BaseModel):
 class UpdateRequest(BaseModel):
     text: str
 
-class SearchRequest(BaseModel):
-    query: str
-    limit: Optional[int] = 5
-
 class ResponseRequest(BaseModel):
     query: str
 
-# Functions for database operations
+
 def get_embedding(content: str, output_dimensionality: int = 768) -> List[float]:
     """Generate text embedding using Gemini API."""
     result = genai.embed_content(
@@ -63,7 +59,7 @@ def parse_embedding(embedding: List[float]) -> np.ndarray:
     """Convert embedding list to NumPy array."""
     return np.array(embedding, dtype=np.float32)
 
-@app.post("/insert")
+@app.post("/")
 def insert_text(request: InsertRequest):
     """Insert text and its embedding into the database."""
     embedding = get_embedding(request.text)
@@ -79,7 +75,7 @@ def insert_text(request: InsertRequest):
     
     return {"id": result.fetchone()[0], "message": "Inserted successfully"}
 
-@app.put("/update/{id}")
+@app.put("/{id}")
 def update_text(id: int, request: UpdateRequest):
     """Update text in the database."""
     query = text("UPDATE embeddings SET text = :text WHERE id = :id")
@@ -91,7 +87,7 @@ def update_text(id: int, request: UpdateRequest):
 
     return {"id": id, "message": "Updated successfully"}
 
-@app.delete("/delete/{id}")
+@app.delete("/{id}")
 def delete_text(id: int):
     """Delete a record by ID."""
     query = text("DELETE FROM embeddings WHERE id = :id")
@@ -103,21 +99,39 @@ def delete_text(id: int):
 
     return {"id": id, "message": "Deleted successfully"}
 
-@app.get("/search")
-def search_similar(request: SearchRequest):
-    """Find similar text using vector similarity."""
-    query = text("""
-        SELECT id, text FROM embeddings
-        ORDER BY vector <-> (:vector)::vector
+@app.get("/")
+def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
+    """Find similar text using vector similarity with pagination."""
+    
+    
+    if query:
+        
+        embedding = get_embedding(query)
+        query_vector = parse_embedding(embedding).tolist()
+        
+        order_clause = "ORDER BY vector <-> (:vector)::vector"
+    else:
+        
+        query_vector = np.zeros(768).tolist()  
+        order_clause = "ORDER BY id"  
+
+    offset = (page) * limit
+    
+    query = text(f"""
+        SELECT id, text 
+        FROM embeddings
+        {order_clause}
         LIMIT :limit
+        OFFSET :offset
     """)
-    embedding = get_embedding(request.query)
-    query_vector = parse_embedding(embedding).tolist()
+    result : CursorResult = session.execute(query, {"vector": query_vector, "limit": limit, "offset": offset})
+        
+    items: List[Dict[str, str]] = []
 
-    result = session.execute(query, {"vector": query_vector, "limit": request.limit})
-    items = [{"id": row[0], "text": row[1]} for row in result.fetchall()]
+    for row in result.fetchall():
+        items.append({"id": str(row[0]), "text": str(row[1])})
 
-    return {"query": request.query, "results": items}
+    return items
 
 @app.post("/respond")
 def respond_to_question(request: ResponseRequest):
@@ -140,7 +154,7 @@ def respond_to_question(request: ResponseRequest):
     
     return response.text
 
-# Run FastAPI with Uvicorn (if executing standalone)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(APP_PORT))
