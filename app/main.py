@@ -165,7 +165,7 @@ def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
 
 def stream(query: str, history: List[Union[str,str]]):    
     history = [{
-        "role": i[1].get("user", "user"),
+        "role": "user",
         "parts": i[0]
     } for i in history]
     
