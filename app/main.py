@@ -65,76 +65,102 @@ def parse_embedding(embedding: List[float]) -> np.ndarray:
 @app.post("/")
 def insert_text(request: InsertRequest):
     """Insert text and its embedding into the database."""
-    embedding = get_embedding(request.text)
-    vector = parse_embedding(embedding).tolist()
+    try:
+        embedding = get_embedding(request.text)
+        vector = parse_embedding(embedding).tolist()
 
-    query = text("""
-        INSERT INTO embeddings (vector, text, metadata)
-        VALUES (:vector, :text, :metadata)
-        RETURNING id
-    """)
-    result = session.execute(query, {"vector": vector, "text": request.text, "metadata": json.dumps( request.metadata)})
-    session.commit()
+        query = text("""
+            INSERT INTO embeddings (vector, text, metadata)
+            VALUES (:vector, :text, :metadata)
+            RETURNING id
+        """)
+        result = session.execute(query, {"vector": vector, "text": request.text, "metadata": json.dumps(request.metadata)})
+        session.commit()
+        
+        return {"id": result.fetchone()[0], "message": "Inserted successfully"}
     
-    return {"id": result.fetchone()[0], "message": "Inserted successfully"}
+    except Exception as e:
+        session.rollback()  # Rollback on failure
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        session.close()  # Ensure session is closed
+
 
 @app.put("/{id}")
 def update_text(id: int, request: UpdateRequest):
     """Update text in the database."""
-    query = text("UPDATE embeddings SET text = :text WHERE id = :id")
-    result = session.execute(query, {"text": request.text, "id": id})
-    session.commit()
+    try:
+        query = text("UPDATE embeddings SET text = :text WHERE id = :id")
+        result = session.execute(query, {"text": request.text, "id": id})
+        session.commit()
 
-    if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Entry not found")
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Entry not found")
 
-    return {"id": id, "message": "Updated successfully"}
+        return {"id": id, "message": "Updated successfully"}
+
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        session.close()
 
 @app.delete("/{id}")
 def delete_text(id: int):
     """Delete a record by ID."""
-    query = text("DELETE FROM embeddings WHERE id = :id")
-    result = session.execute(query, {"id": id})
-    session.commit()
+    try:
+        query = text("DELETE FROM embeddings WHERE id = :id")
+        result = session.execute(query, {"id": id})
+        session.commit()
 
-    if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Entry not found")
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Entry not found")
 
-    return {"id": id, "message": "Deleted successfully"}
+        return {"id": id, "message": "Deleted successfully"}
+
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        session.close()
+
 
 @app.get("/")
 def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
     """Find similar text using vector similarity with pagination."""
-    
-    
-    if query:
-        
-        embedding = get_embedding(query)
-        query_vector = parse_embedding(embedding).tolist()
-        
-        order_clause = "ORDER BY vector <-> (:vector)::vector"
-    else:
-        
-        query_vector = np.zeros(768).tolist()  
-        order_clause = "ORDER BY id"  
+    try:
+        if query:
+            embedding = get_embedding(query)
+            query_vector = parse_embedding(embedding).tolist()
+            order_clause = "ORDER BY vector <-> (:vector)::vector"
+        else:
+            query_vector = np.zeros(768).tolist()
+            order_clause = "ORDER BY id"
 
-    offset = (page) * limit
-    
-    query = text(f"""
-        SELECT id, text, metadata 
-        FROM embeddings
-        {order_clause}
-        LIMIT :limit
-        OFFSET :offset
-    """)
-    result : CursorResult = session.execute(query, {"vector": query_vector, "limit": limit, "offset": offset})
+        offset = page * limit
+
+        query = text(f"""
+            SELECT id, text, metadata 
+            FROM embeddings
+            {order_clause}
+            LIMIT :limit
+            OFFSET :offset
+        """)
+        result: CursorResult = session.execute(query, {"vector": query_vector, "limit": limit, "offset": offset})
         
-    items: List[Dict[str, str]] = []
+        items = [{"id": str(row[0]), "text": str(row[1]), "metadata": str(row[2])} for row in result.fetchall()]
 
-    for row in result.fetchall():
-        items.append({"id": str(row[0]), "text": str(row[1]), "metadata": str(row[2])})
+        return items
 
-    return items
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        session.close()
 
 
 def stream(query: str, history: List[Union[str,str]]):    
