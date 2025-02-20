@@ -31,7 +31,7 @@ app = FastAPI(debug=True)
 engine = create_engine(POSTGRES_URL)
 Session = sessionmaker(bind=engine)
 session = Session()
-
+# 
 chat_session = None
 
 with engine.connect() as conn:
@@ -47,6 +47,7 @@ class UpdateRequest(BaseModel):
 
 class ResponseRequest(BaseModel):
     query: str
+    channel: str = "default"
 
 
 def get_embedding(content: str, output_dimensionality: int = 768) -> List[float]:
@@ -153,7 +154,7 @@ def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
         
         items = [{"id": str(row[0]), "text": str(row[1]), "metadata": str(row[2])} for row in result.fetchall()]
 
-        return items
+        return items 
 
     except Exception as e:
         session.rollback()
@@ -163,11 +164,13 @@ def search_similar(page: int = 0, limit: int = 10, query: str | None = None):
         session.close()
 
 
-def stream(query: str, history: List[Union[str,str]]):    
+def stream(query: str, channel: str, history: List[Union[str,str]]):    
     history = [{
         "role": "user",
         "parts": i[0]
     } for i in history]
+
+    print(f"History:  {history}, query: {query}")
     
     print(f'Question: {query}\nContext: {history}')
     
@@ -198,16 +201,30 @@ async def respond_to_question(request: ResponseRequest):
     """Generate AI response using RAG."""
     embedding = get_embedding(request.query)
     query_vector = parse_embedding(embedding).tolist()
+    channel = request.channel
+
+    if (channel == None):
+        channel = "default"
     
     search_query = text("""
         SELECT text, metadata FROM embeddings
+        WHERE (metadata->id)::text = :channel
         ORDER BY vector <-> (:vector)::vector
-        LIMIT 5
+        LIMIT 3
     """)
-    retrieved_texts = session.execute(search_query, {"vector": query_vector}).fetchall()
+    retrieved_texts = session.execute(search_query, {"vector": query_vector, "channel": channel}).fetchall()
     
+    query = text(f"""
+        SELECT id, text, metadata 
+        FROM embeddings
+        WHERE (metadata->id)::text = :channel
+        ORDER BY id DESC
+        LIMIT 3
+    """)
 
-    response = stream(request.query, retrieved_texts)
+    latest = session.execute(query, {"vector": query_vector, "channel": channel}).fetchall()
+
+    response = stream(request.query, channel, retrieved_texts + latest)
     
     return StreamingResponse(response)
 
