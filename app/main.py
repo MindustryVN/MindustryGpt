@@ -28,6 +28,18 @@ model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=
 app = FastAPI(debug=True)
 
 
+class InsertRequest(BaseModel):
+    text: str
+    metadata: object
+
+class UpdateRequest(BaseModel):
+    text: str
+
+class ResponseRequest(BaseModel):
+    query: str
+    channel: str = "default"
+
+
 # Remove the global session
 engine = create_engine(POSTGRES_URL)
 Session = sessionmaker(bind=engine)
@@ -192,18 +204,6 @@ async def respond_to_question(request: ResponseRequest, db: Session = Depends(ge
     response = stream(request.query, channel, retrieved_texts + latest, db)
     
     return StreamingResponse(response)
-
-class InsertRequest(BaseModel):
-    text: str
-    metadata: object
-
-class UpdateRequest(BaseModel):
-    text: str
-
-class ResponseRequest(BaseModel):
-    query: str
-    channel: str = "default"
-
 
 def get_embedding(content: str, output_dimensionality: int = 768) -> List[float]:
     """Generate text embedding using Gemini API."""
