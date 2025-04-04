@@ -11,6 +11,19 @@ from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import Dict, List, Union
 
+
+
+class InsertRequest(BaseModel):
+    text: str
+    metadata: object
+
+class UpdateRequest(BaseModel):
+    text: str
+
+class ResponseRequest(BaseModel):
+    query: str
+    channel: str = "default"
+
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -26,19 +39,6 @@ model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=
 
 
 app = FastAPI(debug=True)
-
-
-class InsertRequest(BaseModel):
-    text: str
-    metadata: object
-
-class UpdateRequest(BaseModel):
-    text: str
-
-class ResponseRequest(BaseModel):
-    query: str
-    channel: str = "default"
-
 
 # Remove the global session
 engine = create_engine(POSTGRES_URL)
