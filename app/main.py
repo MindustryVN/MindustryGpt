@@ -44,6 +44,8 @@ app = FastAPI(debug=True)
 engine = create_engine(POSTGRES_URL)
 Session = sessionmaker(bind=engine)
 
+# Why watchtower not updating?
+
 # Add dependency for session management
 def get_db():
     db = Session()
