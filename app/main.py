@@ -43,7 +43,7 @@ app = FastAPI(debug=True)
 # Remove the global session
 engine = create_engine(POSTGRES_URL)
 Session = sessionmaker(bind=engine)
-w
+
 # Why watchtower not updating?
 
 # Add dependency for session management
