@@ -35,7 +35,7 @@ if not GEMINI_API_KEY or not POSTGRES_URL:
 
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction="Bạn là một người bạn trên discord, hãy trả lời các cuộc trò truyện một cách vui vẻ")
+model = genai.GenerativeModel(model_name="gemini-2.5-flash-lite", system_instruction="Bạn là một người bạn trên discord, hãy trả lời các cuộc trò truyện một cách vui vẻ")
 
 
 app = FastAPI(debug=True)
