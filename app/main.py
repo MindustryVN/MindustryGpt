@@ -147,8 +147,7 @@ def search_similar(
 def stream(query: str, history: List[Union[str,str]], db: Session):    
     history = [{
         "role": "user",
-        # Index 1 for text
-        "parts": i[0][1]
+        "parts": str(i[0])
     } for i in history]
 
     print(f"History:  {history}, query: {query}")
