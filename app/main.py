@@ -203,6 +203,7 @@ async def respond_to_question(request: ResponseRequest, db: Session = Depends(ge
         return StreamingResponse(response)
     except Exception as e:
         db.rollback()
+        print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 def get_embedding(content: str, output_dimensionality: int = 768) -> List[float]:
