@@ -144,7 +144,7 @@ def search_similar(
         raise HTTPException(status_code=500, detail=str(e))
 
 # Update stream function to accept db session
-def stream(query: str, channel: str, history: List[Union[str,str]], db: Session):    
+def stream(query: str, history: List[Union[str,str]], db: Session):    
     history = [{
         "role": "user",
         "parts": i[0]
@@ -180,30 +180,24 @@ def stream(query: str, channel: str, history: List[Union[str,str]], db: Session)
 async def respond_to_question(request: ResponseRequest, db: Session = Depends(get_db)):
     embedding = get_embedding(request.query)
     query_vector = parse_embedding(embedding).tolist()
-    channel = request.channel
 
-    if (channel == None):
-        channel = "default"
-    
     search_query = text("""
         SELECT text, metadata FROM embeddings
-        WHERE (metadata->id)::text = :channel
         ORDER BY vector <-> (:vector)::vector
         LIMIT 3
     """)
-    retrieved_texts = db.execute(search_query, {"vector": query_vector, "channel": channel}).fetchall()
+    retrieved_texts = db.execute(search_query, {"vector": query_vector}).fetchall()
     
     query = text(f"""
         SELECT id, text, metadata 
         FROM embeddings
-        WHERE (metadata->id)::text = :channel
         ORDER BY id DESC
         LIMIT 3
     """)
 
-    latest = db.execute(query, {"vector": query_vector, "channel": channel}).fetchall()
+    latest = db.execute(query, {"vector": query_vector}).fetchall()
 
-    response = stream(request.query, channel, retrieved_texts + latest, db)
+    response = stream(request.query, retrieved_texts + latest, db)
     
     return StreamingResponse(response)
 
