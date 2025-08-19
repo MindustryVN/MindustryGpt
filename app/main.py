@@ -147,7 +147,7 @@ def search_similar(
 def stream(query: str, history: List[Union[str,str]], db: Session):    
     history = [{
         "role": "user",
-        "parts": i[0]
+        "parts": i[0]["text"]
     } for i in history]
 
     print(f"History:  {history}, query: {query}")
@@ -178,28 +178,32 @@ def stream(query: str, history: List[Union[str,str]], db: Session):
 
 @app.post("/respond")
 async def respond_to_question(request: ResponseRequest, db: Session = Depends(get_db)):
-    embedding = get_embedding(request.query)
-    query_vector = parse_embedding(embedding).tolist()
+    try:
+        embedding = get_embedding(request.query)
+        query_vector = parse_embedding(embedding).tolist()
 
-    search_query = text("""
-        SELECT text, metadata FROM embeddings
-        ORDER BY vector <-> (:vector)::vector
-        LIMIT 3
-    """)
-    retrieved_texts = db.execute(search_query, {"vector": query_vector}).fetchall()
-    
-    query = text(f"""
-        SELECT id, text, metadata 
-        FROM embeddings
-        ORDER BY id DESC
-        LIMIT 3
-    """)
+        search_query = text("""
+            SELECT text, metadata FROM embeddings
+            ORDER BY vector <-> (:vector)::vector
+            LIMIT 3
+        """)
+        retrieved_texts = db.execute(search_query, {"vector": query_vector}).fetchall()
+        
+        query = text(f"""
+            SELECT id, text, metadata 
+            FROM embeddings
+            ORDER BY id DESC
+            LIMIT 3
+        """)
 
-    latest = db.execute(query, {"vector": query_vector}).fetchall()
+        latest = db.execute(query, {"vector": query_vector}).fetchall()
 
-    response = stream(request.query, retrieved_texts + latest, db)
-    
-    return StreamingResponse(response)
+        response = stream(request.query, retrieved_texts + latest, db)
+        
+        return StreamingResponse(response)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 def get_embedding(content: str, output_dimensionality: int = 768) -> List[float]:
     """Generate text embedding using Gemini API."""
