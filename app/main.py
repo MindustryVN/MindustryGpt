@@ -1,15 +1,14 @@
 import json
-import logging
 from dotenv import load_dotenv
 import os
 from fastapi.responses import StreamingResponse
 import google.generativeai as genai
 import numpy as np
 from sqlalchemy import CursorResult, create_engine, text
-from sqlalchemy.orm import sessionmaker
-from fastapi import FastAPI, HTTPException, Query, Depends
+from sqlalchemy.orm import sessionmaker, Session
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Dict, List, Union
+from typing import List, Union
 
 
 
@@ -42,13 +41,13 @@ app = FastAPI(debug=True)
 
 # Remove the global session
 engine = create_engine(POSTGRES_URL)
-Session = sessionmaker(bind=engine)
+dbSession = sessionmaker(bind=engine)
 
 # Why watchtower not updating?
 
 # Add dependency for session management
 def get_db():
-    db = Session()
+    db = dbSession()
     try:
         yield db
     finally:
